@@ -1,4 +1,4 @@
-name: Build UF2 (nRF Connect SDK)
+name: Build (nRF Connect SDK)
 
 on:
   push:
@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-uf2:
+  build:
     runs-on: ubuntu-latest
 
     env:
       NCS_REV: v2.8.0
       BOARD: promicro_nrf52840/nrf52840
-      UF2_FAMILY_ID: "0xADA52840"
 
     steps:
       - name: Checkout app repo
@@ -26,11 +25,11 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake ninja-build curl xz-utils file
+          sudo apt-get install -y git cmake ninja-build curl xz-utils file libunistring2
 
-      - name: Install nrfutil + toolchain-manager + NCS toolchain
+      - name: Install nrfutil + toolchain-manager + toolchain
         run: |
-          # Get nrfutil (Linux x64)
+          # Install nrfutil (Linux x64)
           curl -L -o nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
           chmod +x nrfutil
           sudo mv nrfutil /usr/local/bin/nrfutil
@@ -38,68 +37,36 @@ jobs:
           # Install toolchain-manager plugin
           nrfutil install toolchain-manager
 
-          # Install toolchain for the requested NCS version
+          # Install toolchain for this NCS version
           nrfutil toolchain-manager install --ncs-version ${NCS_REV}
-          nrfutil toolchain-manager list
 
-          # Export toolchain environment vars into THIS shell (important for GitHub Actions)
+          # Export toolchain env vars into a script we can source in later steps
           nrfutil toolchain-manager env --as-script > export_env.sh
-          cat export_env.sh
-          echo "Sourcing toolchain environment..."
-          source export_env.sh
+          echo "Toolchain env:"
+          sed -n '1,120p' export_env.sh
 
-          # Make sure west exists (comes with the toolchain env on most installs),
-          # but install it if it doesn't.
-          if ! command -v west >/dev/null 2>&1; then
-            python -m pip install --upgrade pip
-            pip install west
-          fi
+          # Ensure west exists (usually provided by toolchain env, but keep safe)
+          python -m pip install --upgrade pip
+          pip install west
 
-          # Print versions for debugging
-          which west || true
-          west --version || true
-          cmake --version
-          ninja --version
-          arm-zephyr-eabi-gcc --version || true
-
-      - name: Init NCS workspace and fetch repos (west)
+      - name: Init NCS workspace (west)
         run: |
           source export_env.sh
           mkdir -p ncs
           cd ncs
-
           west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
           west update
           west zephyr-export
-
-          # Python deps for Zephyr scripts
           python -m pip install -r zephyr/scripts/requirements.txt
 
-      - name: Build app
+      - name: Build your app
         run: |
           source export_env.sh
           cd ncs
-
-          # Build *your repo* as the application
           west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
 
-      - name: Convert HEX -> UF2
-        run: |
-          cd ncs
-          HEX="$(find build -maxdepth 6 -name 'merged.hex' -o -name 'zephyr.hex' | head -n 1)"
-          if [ -z "$HEX" ]; then
-            echo "No hex file found under ncs/build"
-            find build -maxdepth 6 -type f | sed -n '1,200p'
-            exit 1
-          fi
-          echo "Using HEX: $HEX"
-
-          curl -L -o uf2conv.py https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py
-          python3 uf2conv.py -c -f "${UF2_FAMILY_ID}" -o zephyr.uf2 "$HEX"
-          ls -lh zephyr.uf2
-
-      - name: Upload UF2 artifact
+      - name: Upload build folder (optional)
         uses: actions/upload-artifact@v4
         with:
-          name: zephyr-uf2
-          path: ncs/zephyr.uf2
+          name: build-output
+          path: ncs/build
