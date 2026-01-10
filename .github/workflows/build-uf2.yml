@@ -25,7 +25,7 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake ninja-build curl xz-utils file libunistring2
+          sudo apt-get install -y git cmake ninja-build curl xz-utils file
 
       - name: Install nrfutil + toolchain-manager + toolchain
         run: |
@@ -51,13 +51,13 @@ jobs:
 
       - name: Init NCS workspace (west)
         run: |
-          source export_env.sh
           mkdir -p ncs
           cd ncs
           west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
           west update
           west zephyr-export
           python -m pip install -r zephyr/scripts/requirements.txt
+
 
       - name: Build your app
         run: |
