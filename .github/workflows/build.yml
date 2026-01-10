@@ -16,7 +16,7 @@ jobs:
 
     env:
       NCS_REV: v3.2.1
-      BOARD: nrf52840dk/nrf52840
+      BOARD: promicro_nrf52840/nrf52840
 
     steps:
       - name: Checkout app repo
