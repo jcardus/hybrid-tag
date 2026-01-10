@@ -1,4 +1,4 @@
-name: Build UF2 (nRF Connect SDK / Zephyr)
+name: Build UF2 (nRF Connect SDK)
 
 on:
   push:
@@ -18,53 +18,32 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      # Installs Nordic toolchain + caches it
+      - name: Set up nRF Connect SDK
+        uses: nordic-actions/setup-nrf@v2
         with:
-          python-version: "3.11"
+          version: ${{ env.NCS_REV }}
 
-      - name: Install west + build tools
+      - name: Build app
         run: |
-          python -m pip install --upgrade pip
-          pip install west
-          sudo apt-get update
-          sudo apt-get install -y ninja-build cmake gcc g++ git curl
-
-      - name: Init NCS workspace (west)
-        run: |
-          mkdir -p ncs
-          cd ncs
-          west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
-          west update
-          west zephyr-export
-          pip install -r zephyr/scripts/requirements.txt
-
-      - name: Build app with west
-        run: |
-          cd ncs
-          west build \
-            -b "${BOARD}" \
-            -p always \
-            -s "${GITHUB_WORKSPACE}" \
-            -d build
+          west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
 
       - name: Convert HEX -> UF2
         run: |
-          cd ncs
           HEX="$(find build -maxdepth 6 -name 'merged.hex' -o -name 'zephyr.hex' | head -n 1)"
           if [ -z "$HEX" ]; then
-            echo "No hex file found under ncs/build"
+            echo "No hex file found"
             find build -maxdepth 6 -type f | sed -n '1,200p'
             exit 1
           fi
           echo "Using HEX: $HEX"
 
           curl -L -o uf2conv.py https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py
-          python uf2conv.py -c -f "${UF2_FAMILY_ID}" -o zephyr.uf2 "$HEX"
+          python3 uf2conv.py -c -f "${UF2_FAMILY_ID}" -o zephyr.uf2 "$HEX"
           ls -lh zephyr.uf2
 
       - name: Upload UF2 artifact
         uses: actions/upload-artifact@v4
         with:
           name: zephyr-uf2
-          path: ncs/zephyr.uf2
+          path: zephyr.uf2
