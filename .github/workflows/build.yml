@@ -50,14 +50,7 @@ jobs:
           pip install west
 
       - name: Init NCS workspace (west)
-        run: |
-          mkdir -p ncs
-          cd ncs
-          west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
-          west update
-          west zephyr-export
-          python -m pip install -r zephyr/scripts/requirements.txt
-
+        run: scripts/init-scs.sh
 
       - name: Build your app
         run: |
