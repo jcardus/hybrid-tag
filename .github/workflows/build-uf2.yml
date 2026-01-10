@@ -18,21 +18,77 @@ jobs:
       - name: Checkout app repo
         uses: actions/checkout@v4
 
-      # Installs Nordic toolchain + caches it
-      - name: Set up nRF Connect SDK
-        uses: nordic-actions/setup-nrf@v2
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          version: ${{ env.NCS_REV }}
+          python-version: "3.11"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git cmake ninja-build curl xz-utils file
+
+      - name: Install nrfutil + toolchain-manager + NCS toolchain
+        run: |
+          # Get nrfutil (Linux x64)
+          curl -L -o nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
+          chmod +x nrfutil
+          sudo mv nrfutil /usr/local/bin/nrfutil
+
+          # Install toolchain-manager plugin
+          nrfutil install toolchain-manager
+
+          # Install toolchain for the requested NCS version
+          nrfutil toolchain-manager install --ncs-version ${NCS_REV}
+          nrfutil toolchain-manager list
+
+          # Export toolchain environment vars into THIS shell (important for GitHub Actions)
+          nrfutil toolchain-manager env --as-script > export_env.sh
+          cat export_env.sh
+          echo "Sourcing toolchain environment..."
+          source export_env.sh
+
+          # Make sure west exists (comes with the toolchain env on most installs),
+          # but install it if it doesn't.
+          if ! command -v west >/dev/null 2>&1; then
+            python -m pip install --upgrade pip
+            pip install west
+          fi
+
+          # Print versions for debugging
+          which west || true
+          west --version || true
+          cmake --version
+          ninja --version
+          arm-zephyr-eabi-gcc --version || true
+
+      - name: Init NCS workspace and fetch repos (west)
+        run: |
+          source export_env.sh
+          mkdir -p ncs
+          cd ncs
+
+          west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
+          west update
+          west zephyr-export
+
+          # Python deps for Zephyr scripts
+          python -m pip install -r zephyr/scripts/requirements.txt
 
       - name: Build app
         run: |
+          source export_env.sh
+          cd ncs
+
+          # Build *your repo* as the application
           west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
 
       - name: Convert HEX -> UF2
         run: |
+          cd ncs
           HEX="$(find build -maxdepth 6 -name 'merged.hex' -o -name 'zephyr.hex' | head -n 1)"
           if [ -z "$HEX" ]; then
-            echo "No hex file found"
+            echo "No hex file found under ncs/build"
             find build -maxdepth 6 -type f | sed -n '1,200p'
             exit 1
           fi
@@ -46,4 +102,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: zephyr-uf2
-          path: zephyr.uf2
+          path: ncs/zephyr.uf2
