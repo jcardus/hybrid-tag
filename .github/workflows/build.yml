@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      NCS_REV: v2.8.0
+      NCS_REV: v3.2.1
       BOARD: nrf52840dk/nrf52840
 
     steps:
