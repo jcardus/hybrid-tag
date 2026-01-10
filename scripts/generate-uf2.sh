@@ -1,14 +1,9 @@
 #!/bin/bash
 set -e
 
-BOARD=${1:-""}
-HEX_FILE=${2:-"ncs/build/merged.hex"}
-UF2_FILE=${3:-"ncs/build/zephyr.uf2"}
-
-if [ -z "$BOARD" ]; then
-  echo "Usage: $0 <board> [hex_file] [uf2_file]"
-  exit 1
-fi
+BOARD=${1:-"promicro_nrf52840/nrf52840"}
+HEX_FILE=${2:-"build/merged.hex"}
+UF2_FILE=${3:-"build/zephyr.uf2"}
 
 # Map board to UF2 family ID
 if [[ "${BOARD}" == *"nrf52840"* ]]; then
@@ -37,3 +32,6 @@ python3 uf2conv.py "${HEX_FILE}" -c -f ${FAMILY_ID} -o "${UF2_FILE}"
 
 echo "UF2 file generated for ${BOARD}:"
 ls -lh "${UF2_FILE}"
+
+# Optional: Copy UF2 to mounted device (uncomment if needed)
+# cp -X "${UF2_FILE}" /Volumes/NICENANO/

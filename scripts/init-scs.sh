@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${NCS_REV:=v2.8.0}"
+: "${NCS_REV:=v3.2.1}"
 
 mkdir -p ncs
 cd ncs || exit
