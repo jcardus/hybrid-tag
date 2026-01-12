@@ -34,4 +34,4 @@ echo "UF2 file generated for ${BOARD}:"
 ls -lh "${UF2_FILE}"
 
 # Optional: Copy UF2 to mounted device (uncomment if needed)
-# cp -X "${UF2_FILE}" /Volumes/NICENANO/
+cp -X "${UF2_FILE}" /Volumes/NICENANO/
