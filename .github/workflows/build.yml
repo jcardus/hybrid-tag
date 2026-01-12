@@ -50,12 +50,14 @@ jobs:
           echo "Toolchain env:"
           sed -n '1,120p' export_env.sh
 
-          # Ensure west exists (usually provided by toolchain env, but keep safe)
-          python -m pip install --upgrade pip
-          pip install west
-
       - name: Init NCS workspace (west)
-        run: scripts/init-scs.sh
+        run: |
+          mkdir -p ncs
+          cd ncs || exit
+          west init -m https://github.com/nrfconnect/sdk-nrf --mr ${NCS_REV}
+          west update
+          west zephyr-export
+          python -m pip install -r zephyr/scripts/requirements.txt
 
       - name: Build your app
         run: |
