@@ -65,9 +65,6 @@ jobs:
           cd ncs
           west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
 
-      - name: Generate UF2 file
-        run: scripts/generate-uf2.sh "${BOARD}"
-
       - name: Prepare GitHub Pages
         run: |
           mkdir -p _site
