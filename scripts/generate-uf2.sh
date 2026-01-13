@@ -35,3 +35,7 @@ ls -lh "${UF2_FILE}"
 
 # Optional: Copy UF2 to mounted device (uncomment if needed)
 cp -X "${UF2_FILE}" /Volumes/NICENANO/
+
+screen /dev/cu.usbmodem1101 115200
+
+
