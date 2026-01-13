@@ -31,7 +31,7 @@ static protocol_t current_protocol = PROTOCOL_APPLE_FINDMY;
 /*
  * Apple FindMy Offline Finding Advertisement Format:
  * - Uses manufacturer-specific data (Apple Company ID: 0x004C)
- * - Payload structure (following Everytag format):
+ * - Payload structure:
  *   [0-1]:  Apple Company ID (0x4C, 0x00) - 2 bytes
  *   [2]:    Type (0x12 for Offline Finding) - 1 byte
  *   [3]:    Length (0x19 = 25 bytes following) - 1 byte
@@ -135,7 +135,7 @@ static void set_mac_address(void)
 	bt_ctlr_set_public_addr(addr);
 }
 
-/* Start advertising for current protocol */
+/* Start advertising for the current protocol */
 static int start_advertising(void)
 {
 	struct bt_le_adv_param adv_param = {
@@ -201,12 +201,9 @@ int main(void)
 	set_mac_address();
 
 	/* Initialize the Bluetooth Subsystem */
-	bt_enable(bt_ready);
-
-	/* Main loop - just sleep forever, timers will handle everything */
-	while (1) {
-		k_sleep(K_FOREVER);
+	int err = bt_enable(bt_ready);
+	if (err) {
+		printk("Bluetooth init failed (err %d)\n", err);
 	}
-
 	return 0;
 }
