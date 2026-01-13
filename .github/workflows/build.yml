@@ -41,10 +41,13 @@ jobs:
           # Install toolchain for this NCS version
           ./nrfutil install toolchain-manager
           ./nrfutil toolchain-manager install --ncs-version ${NCS_REV}
-          # Export toolchain env vars into a script we can source in later steps
+          
+          # Export toolchain env vars into a script we can source
           ./nrfutil toolchain-manager env --as-script > export_env.sh
-          echo "Toolchain env:"
-          cat export_env.sh
+          
+          # Install west
+          python -m pip install --upgrade pip
+          pip install west
 
       - name: Init NCS workspace (west)
         run: |
@@ -57,7 +60,7 @@ jobs:
 
       - name: Build your app
         run: |
-          source export_env.sh
+          source ../export_env.sh
           west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
         working-directory: ncs
 
