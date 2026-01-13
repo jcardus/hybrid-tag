@@ -37,18 +37,14 @@ jobs:
           # Install nrfutil (Linux x64)
           curl -L -o nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
           chmod +x nrfutil
-          sudo mv nrfutil /usr/local/bin/nrfutil
-
-          # Install toolchain-manager plugin
-          nrfutil install toolchain-manager
 
           # Install toolchain for this NCS version
-          nrfutil toolchain-manager install --ncs-version ${NCS_REV}
-
+          ./nrfutil install toolchain-manager
+          ./nrfutil toolchain-manager install --ncs-version ${NCS_REV}
           # Export toolchain env vars into a script we can source in later steps
-          nrfutil toolchain-manager env --as-script > export_env.sh
+          ./nrfutil toolchain-manager env --as-script > export_env.sh
           echo "Toolchain env:"
-          sed -n '1,120p' export_env.sh
+          cat export_env.sh
 
       - name: Init NCS workspace (west)
         run: |
@@ -62,8 +58,8 @@ jobs:
       - name: Build your app
         run: |
           source export_env.sh
-          cd ncs
           west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
+        working-directory: ncs
 
       - name: Prepare GitHub Pages
         run: |
