@@ -13,13 +13,8 @@
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/controller.h>
-#include <zephyr/drivers/gpio.h>
 
 #include "keys.h"
-
-/* LED for status indication */
-#define LED0_NODE DT_ALIAS(led0)
-static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
 
 /* Protocol selection */
 typedef enum {
@@ -183,63 +178,17 @@ static void protocol_switcher(struct k_timer *timer)
 
 K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 
-/* LED blink timer callback - indicates active protocol
- * Apple FindMy: 1 short blink every 2 seconds
- * Google FMDN: 2 short blinks every 2 seconds
- */
-static void led_blink_handler(struct k_timer *timer)
-{
-	static uint8_t blink_state = 0;
-
-	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
-		/* Single blink pattern for Apple FindMy: ON at 0, OFF at 1-9 */
-		if (blink_state == 0) {
-			gpio_pin_set_dt(&led, 1); /* On */
-		} else {
-			gpio_pin_set_dt(&led, 0); /* Off */
-		}
-		blink_state = (blink_state + 1) % 10;
-	} else {
-		/* Double blink pattern for Google FMDN: ON at 0,2 OFF at 1,3-9 */
-		switch (blink_state) {
-		case 0:
-		case 2:
-			gpio_pin_set_dt(&led, 1); /* On */
-			break;
-		default:
-			gpio_pin_set_dt(&led, 0); /* Off */
-			break;
-		}
-		blink_state = (blink_state + 1) % 10;
-	}
-}
-
-K_TIMER_DEFINE(led_blink_timer, led_blink_handler, NULL);
-
 static void bt_ready(int err)
 {
 	if (err) {
-		/* BT init error blink: every 2 seconds */
-		while (1) {
-			gpio_pin_toggle_dt(&led);
-			k_msleep(2000);
-		}
 		return;
 	}
 
 	/* Start advertising with current protocol */
 	err = start_advertising();
 	if (err) {
-		/* Advertising error blink: every 4 seconds */
-		while (1) {
-			gpio_pin_toggle_dt(&led);
-			k_msleep(4000);
-		}
 		return;
 	}
-
-	/* Start LED blink timer - 200ms interval for blink patterns */
-	k_timer_start(&led_blink_timer, K_MSEC(200), K_MSEC(200));
 
 	/* Start protocol switcher timer (currently disabled) */
 	// k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),
@@ -248,23 +197,6 @@ static void bt_ready(int err)
 
 int main(void)
 {
-	/* Initialize LED */
-	if (!gpio_is_ready_dt(&led)) {
-		/* LED init failed - blink rapidly forever */
-		while (1) {
-			k_msleep(100);
-		}
-	}
-	gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
-
-	/* Flash LED 3 times on startup */
-	for (int i = 0; i < 10; i++) {
-		gpio_pin_set_dt(&led, 1);
-		k_msleep(100);
-		gpio_pin_set_dt(&led, 0);
-		k_msleep(100);
-	}
-
 	/* Set MAC address BEFORE enabling Bluetooth */
 	set_mac_address();
 
