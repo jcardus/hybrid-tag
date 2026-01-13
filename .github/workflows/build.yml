@@ -61,21 +61,17 @@ jobs:
       - name: Build your app
         run: |
           source ../export_env.sh
-          west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}" -d build
+          west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}"
         working-directory: ncs
 
       - name: Prepare GitHub Pages
+        working-directory: ncs
         run: |
           mkdir -p _site
-          cp -r ncs/build/zephyr/zephyr.* _site/ 2>/dev/null || true
-          cp -r ncs/build/zephyr/*.hex _site/ 2>/dev/null || true
-          cp -r ncs/build/zephyr/*.bin _site/ 2>/dev/null || true
-          cp -r ncs/build/zephyr/*.uf2 _site/ 2>/dev/null || true
+          cp -r ncs/build/*.hex _site
 
-          # Get current date and time
           BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
-          # Create an index.html with links to the artifacts
           cat > _site/index.html << EOF
           <!DOCTYPE html>
           <html>
@@ -94,8 +90,8 @@ jobs:
           <body>
             <h1>Hybrid Tag Build Artifacts</h1>
             <p class="build-info">Built: ${BUILD_DATE}</p>
-            <p>Board: nrf52840dk/nrf52840</p>
-            <p>NCS Version: v2.8.0</p>
+            <p>Board: ${BOARD}</p>
+            <p>NCS Version: ${NCS_REV}</p>
             <h2>Download Files:</h2>
             <ul>
           EOF
