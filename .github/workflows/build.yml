@@ -68,7 +68,7 @@ jobs:
         working-directory: ncs
         run: |
           mkdir -p _site
-          cp -r ncs/build/*.hex _site
+          cp -r build/*.hex _site
 
           BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
 
