@@ -1,9 +1,13 @@
 #!/bin/bash
 set -e
+source ../ncs/export_env.sh
 
 BOARD=${1:-"promicro_nrf52840/nrf52840"}
 HEX_FILE=${2:-"build/merged.hex"}
 UF2_FILE=${3:-"build/zephyr.uf2"}
+
+cd ../ncs
+west build -p always -b promicro_nrf52840/nrf52840 -s ..
 
 # Map board to UF2 family ID
 if [[ "${BOARD}" == *"nrf52840"* ]]; then
@@ -35,3 +39,4 @@ ls -lh "${UF2_FILE}"
 
 # Optional: Copy UF2 to mounted device (uncomment if needed)
 cp -X "${UF2_FILE}" /Volumes/NICENANO/
+screen /dev/cu.usbmodem1101 115200
