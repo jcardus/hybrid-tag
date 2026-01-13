@@ -23,7 +23,7 @@ typedef enum {
 } protocol_t;
 
 /* Current active protocol */
-static protocol_t current_protocol = PROTOCOL_APPLE_FINDMY;
+static protocol_t current_protocol = PROTOCOL_GOOGLE_FMDN;
 
 /* Protocol switch interval in seconds (1 minute per protocol) */
 #define PROTOCOL_SWITCH_INTERVAL_SEC 60
@@ -161,19 +161,32 @@ static int start_advertising(void)
 	return err;
 }
 
-/* Protocol switcher timer callback */
-static void protocol_switcher(struct k_timer *timer)
+/* Work item for protocol switching (runs in thread context) */
+static void protocol_switch_work_handler(struct k_work *work)
 {
 	/* Switch protocol */
 	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
 		current_protocol = PROTOCOL_GOOGLE_FMDN;
+		printk("Switching to Google FMDN\n");
 	} else {
 		current_protocol = PROTOCOL_APPLE_FINDMY;
+		printk("Switching to Apple FindMy\n");
 	}
 
-	/* Update MAC and restart advertising */
-	set_mac_address();
-	start_advertising();
+	/* Restart advertising with a new protocol payload */
+	const int err = start_advertising();
+	if (err) {
+		printk("Failed to restart advertising (err %d)\n", err);
+	}
+}
+
+K_WORK_DEFINE(protocol_switch_work, protocol_switch_work_handler);
+
+/* Protocol switcher timer callback (runs in ISR context) */
+static void protocol_switcher(struct k_timer *timer)
+{
+	/* Submit work to the system work queue (will run in thread context) */
+	k_work_submit(&protocol_switch_work);
 }
 
 K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
@@ -181,27 +194,35 @@ K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 static void bt_ready(int err)
 {
 	if (err) {
+		printk("Bluetooth ready failed (err %d)\n", err);
 		return;
 	}
 
-	/* Start advertising with current protocol */
+	printk("Starting with %s\n",
+		current_protocol == PROTOCOL_APPLE_FINDMY ? "Apple FindMy" : "Google FMDN");
+
 	err = start_advertising();
 	if (err) {
+		printk("Advertising failed to start (err %d)\n", err);
 		return;
 	}
 
-	/* Start protocol switcher timer (currently disabled) */
-	// k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),
-	//	      K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
+	printk("Advertising started successfully\n");
+
+	/* Start the protocol switcher timer */
+	k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
+	printk("Protocol switcher timer started (interval: %d seconds)\n", PROTOCOL_SWITCH_INTERVAL_SEC);
 }
 
 int main(void)
 {
+	printk("Hybrid Tag starting...\n");
+
 	/* Set MAC address BEFORE enabling Bluetooth */
 	set_mac_address();
 
 	/* Initialize the Bluetooth Subsystem */
-	int err = bt_enable(bt_ready);
+	const int err = bt_enable(bt_ready);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 	}
