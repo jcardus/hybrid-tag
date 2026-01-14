@@ -17,30 +17,14 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/bluetooth/gatt.h>
 
-#include "keys.h"
+#include "main.h"
 
 static bool device_configured = false;
 
-/* Protocol selection */
-typedef enum {
-	PROTOCOL_APPLE_FINDMY,
-	PROTOCOL_GOOGLE_FMDN,
-} protocol_t;
-
-/* Current active protocol */
 static protocol_t current_protocol = PROTOCOL_GOOGLE_FMDN;
 
-/* Protocol switch interval in seconds (1 minute per protocol) */
-#define PROTOCOL_SWITCH_INTERVAL_SEC 60
-
-#define BT_UUID_CUSTOM_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
-
-static const struct bt_uuid_128 config_service_uuid = BT_UUID_INIT_128(BT_UUID_CUSTOM_SERVICE_VAL);
-
-static const struct bt_uuid_128 write_apple_key_cmd_uuid = BT_UUID_INIT_128(
-	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1));
-
 static uint8_t apple_key[28];
+static uint8_t google_key[20];
 
 static ssize_t write_apple_key(struct bt_conn *conn,
 					 const struct bt_gatt_attr *attr,
@@ -88,7 +72,6 @@ static const struct bt_data config_sd[] = {
  *   [28]:   Hint byte - 1 byte
  *   Total: 2 + 1 + 1 + 1 + 22 + 1 + 1 = 29 bytes
  */
-#define APPLE_FINDMY_PAYLOAD_SIZE 29
 static uint8_t apple_findmy_payload[APPLE_FINDMY_PAYLOAD_SIZE];
 
 static struct bt_data apple_ad[] = {
@@ -130,11 +113,11 @@ static void prepare_apple_findmy_adv(void)
 	/* Status byte: 0x00 (no battery/motion info) */
 	apple_findmy_payload[4] = 0x00;
 
-	/* Copy 22 bytes of public key starting from byte 6 (bytes 6-27) */
-	memcpy(&apple_findmy_payload[5], &apple_keys[0][6], 22);
+	/* Copy 22 bytes of a public key starting from byte 6 (bytes 6-27) */
+	memcpy(&apple_findmy_payload[5], &apple_key[6], 22);
 
 	/* First two bits from key[0] (top 2 bits of the byte used in MAC) */
-	apple_findmy_payload[27] = (apple_keys[0][0] >> 6) & 0x03;
+	apple_findmy_payload[27] = (apple_key[0] >> 6) & 0x03;
 
 	/* Hint byte: 0x00 */
 	apple_findmy_payload[28] = 0x00;
@@ -160,14 +143,14 @@ static void set_mac_address(void)
 	uint8_t addr[6];
 
 	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
-		/* For Apple: derive MAC from first 6 bytes of public key */
+		/* For Apple: derive MAC from first 6 bytes of a public key */
 		/* Address bytes are reversed (Everytag/heystack style) */
-		addr[5] = apple_keys[0][0] | 0xC0; /* MSB with static random bits */
-		addr[4] = apple_keys[0][1];
-		addr[3] = apple_keys[0][2];
-		addr[2] = apple_keys[0][3];
-		addr[1] = apple_keys[0][4];
-		addr[0] = apple_keys[0][5]; /* LSB */
+		addr[5] = apple_key[0] | 0xC0; /* MSB with static random bits */
+		addr[4] = apple_key[1];
+		addr[3] = apple_key[2];
+		addr[2] = apple_key[3];
+		addr[1] = apple_key[4];
+		addr[0] = apple_key[5]; /* LSB */
 	} else {
 		/* For Google: use non-resolvable private address (NRPA) */
 		addr[5] = google_key[0] & 0x3F; /* MSB with NRPA bits cleared */
@@ -325,13 +308,11 @@ static void bt_ready(int err)
 int main(void)
 {
 	printk("Hybrid Tag starting...\n");
-
 	/* Initialize Bluetooth - bt_ready callback will handle config check */
 	const int err = bt_enable(bt_ready);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
 		return err;
 	}
-
 	return 0;
 }
