@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import base64
 
 from bleak import BleakClient, BleakScanner
 
@@ -8,20 +9,15 @@ SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0"
 APPLE_KEY_UUID = "12345678-1234-5678-1234-56789abcdef1"
 
 
-def hex_to_bytes(value: str) -> bytes:
-    value = value.replace(" ", "")
-    return bytes.fromhex(value)
-
-
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Provision Apple key over BLE.")
     parser.add_argument("--name", default="HYBRID-TAG", help="BLE name to match")
-    parser.add_argument("--key", default="0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c", help="28-byte Apple key (56 hex chars)")
+    parser.add_argument("--key", default="WPS9RJBtGkPLvMvFBhvKkofMabkdsdiPzLBSzg==", help="28-byte Apple key (base64)")
     args = parser.parse_args()
 
-    key = hex_to_bytes(args.key)
+    key = base64.b64decode(args.key)
     if len(key) != 28:
-        raise SystemExit("Key must be 28 bytes (56 hex chars)")
+        raise SystemExit("Key must be 28 bytes")
 
     print("Scanning...")
     device = await BleakScanner.find_device_by_name(args.name, timeout=30.0)
