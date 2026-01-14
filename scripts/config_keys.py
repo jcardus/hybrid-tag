@@ -13,6 +13,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Provision Apple key over BLE.")
     parser.add_argument("--name", default="HYBRID-TAG", help="BLE name to match")
     parser.add_argument("--key", default="WPS9RJBtGkPLvMvFBhvKkofMabkdsdiPzLBSzg==", help="28-byte Apple key (base64)")
+    parser.add_argument("--keyGoogle", default="34aaaffb11e8bf854630bd2ce56fa6b06603b20b", help="20-byte Google key (hexa)")
     args = parser.parse_args()
 
     key = base64.b64decode(args.key)
