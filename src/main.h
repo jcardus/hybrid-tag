@@ -16,6 +16,10 @@ static const struct bt_uuid_128 config_service_uuid = BT_UUID_INIT_128(BT_UUID_C
 
 static const struct bt_uuid_128 write_apple_key_cmd_uuid = BT_UUID_INIT_128(
     BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1));
+
+static const struct bt_uuid_128 write_google_key_cmd_uuid = BT_UUID_INIT_128(
+    BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef2));
+
 #define APPLE_FINDMY_PAYLOAD_SIZE 29
 
 /* Protocol selection */
