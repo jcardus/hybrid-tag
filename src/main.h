@@ -9,7 +9,7 @@
 /* Google FMDN can use 20-byte (160-bit) or 32-byte (256-bit) keys */
 #define GOOGLE_KEY_SIZE 20
 
-#define PROTOCOL_SWITCH_INTERVAL_SEC 30
+#define PROTOCOL_SWITCH_INTERVAL_SEC 60
 
 #define BT_UUID_CUSTOM_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
 static const struct bt_uuid_128 config_service_uuid = BT_UUID_INIT_128(BT_UUID_CUSTOM_SERVICE_VAL);
@@ -28,5 +28,6 @@ static void protocol_switcher(struct k_timer *timer);
 
 K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 
-
+static void set_mac_address(void);
+static int start_advertising(void);
 #endif /* MAIN_H */

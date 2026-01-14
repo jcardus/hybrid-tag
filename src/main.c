@@ -28,6 +28,17 @@ static uint8_t google_key[20];
 
 static bool apple_key_part1_received = false;
 
+/* Work handler to start advertising after the key is received */
+static void start_advertising_work_handler(struct k_work *work)
+{
+	bt_disable();
+	set_mac_address();
+	bt_enable(NULL);
+	k_timer_start(&protocol_timer, K_SECONDS(0), K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
+}
+
+K_WORK_DELAYABLE_DEFINE(start_advertising_work, start_advertising_work_handler);
+
 static ssize_t write_apple_key(struct bt_conn *conn,
 					 const struct bt_gatt_attr *attr,
 					 const void *buf, uint16_t len, uint16_t offset,
@@ -49,8 +60,7 @@ static ssize_t write_apple_key(struct bt_conn *conn,
 		}
 		printk("\n");
 		device_configured = true;
-		k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),
-			      K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
+		k_work_schedule(&start_advertising_work, K_SECONDS(2));
 	} else {
 		printk("Unexpected write: %u bytes (part1_received=%d)\n", len, apple_key_part1_received);
 	}
@@ -159,27 +169,15 @@ static void prepare_google_fmdn_adv(void)
 static void set_mac_address(void)
 {
 	uint8_t addr[6];
+	/* For Apple: derive MAC from the first 6 bytes of a public key */
+	/* Address bytes are reversed */
+	addr[5] = apple_key[0] | 0xC0; /* MSB with static random bits */
+	addr[4] = apple_key[1];
+	addr[3] = apple_key[2];
+	addr[2] = apple_key[3];
+	addr[1] = apple_key[4];
+	addr[0] = apple_key[5]; /* LSB */
 
-	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
-		/* For Apple: derive MAC from first 6 bytes of a public key */
-		/* Address bytes are reversed (Everytag/heystack style) */
-		addr[5] = apple_key[0] | 0xC0; /* MSB with static random bits */
-		addr[4] = apple_key[1];
-		addr[3] = apple_key[2];
-		addr[2] = apple_key[3];
-		addr[1] = apple_key[4];
-		addr[0] = apple_key[5]; /* LSB */
-	} else {
-		/* For Google: use non-resolvable private address (NRPA) */
-		addr[5] = google_key[0] & 0x3F; /* MSB with NRPA bits cleared */
-		addr[4] = google_key[1];
-		addr[3] = google_key[2];
-		addr[2] = google_key[3];
-		addr[1] = google_key[4];
-		addr[0] = google_key[5]; /* LSB */
-	}
-
-	/* Set the public address using controller API (must be called before bt_enable) */
 	bt_ctlr_set_public_addr(addr);
 }
 
@@ -196,8 +194,6 @@ static int start_advertising(void)
 	int err;
 
 	bt_le_adv_stop();
-
-	set_mac_address();
 
 	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
 		prepare_apple_findmy_adv();
