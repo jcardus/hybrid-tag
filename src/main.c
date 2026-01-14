@@ -13,8 +13,13 @@
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/controller.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/uuid.h>
+#include <zephyr/bluetooth/gatt.h>
 
 #include "keys.h"
+
+static bool device_configured = false;
 
 /* Protocol selection */
 typedef enum {
@@ -28,6 +33,48 @@ static protocol_t current_protocol = PROTOCOL_GOOGLE_FMDN;
 /* Protocol switch interval in seconds (1 minute per protocol) */
 #define PROTOCOL_SWITCH_INTERVAL_SEC 60
 
+#define BT_UUID_CUSTOM_SERVICE_VAL BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef0)
+
+static const struct bt_uuid_128 config_service_uuid = BT_UUID_INIT_128(BT_UUID_CUSTOM_SERVICE_VAL);
+
+static const struct bt_uuid_128 write_apple_key_cmd_uuid = BT_UUID_INIT_128(
+	BT_UUID_128_ENCODE(0x12345678, 0x1234, 0x5678, 0x1234, 0x56789abcdef1));
+
+static uint8_t apple_key[28];
+
+static ssize_t write_apple_key(struct bt_conn *conn,
+					 const struct bt_gatt_attr *attr,
+					 const void *buf, uint16_t len, uint16_t offset,
+					 uint8_t flags)
+{
+	printk("write_apple_key received %u bytes: ", len);
+	for (uint16_t i = 0; i < len; i++) {
+		printk("%02x ", ((uint8_t *)buf)[i]);
+	}
+	printk("\n");
+	return len;
+}
+
+BT_GATT_SERVICE_DEFINE(config_svc,
+	BT_GATT_PRIMARY_SERVICE(&config_service_uuid),
+	BT_GATT_CHARACTERISTIC(&write_apple_key_cmd_uuid.uuid,
+				   BT_GATT_CHRC_WRITE,
+				   BT_GATT_PERM_WRITE, NULL,
+				   write_apple_key, &apple_key),
+);
+
+static const struct bt_data config_ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA_BYTES(BT_DATA_UUID16_ALL,
+			  BT_UUID_16_ENCODE(BT_UUID_HRS_VAL),
+			  BT_UUID_16_ENCODE(BT_UUID_BAS_VAL),
+			  BT_UUID_16_ENCODE(BT_UUID_CTS_VAL)),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_CUSTOM_SERVICE_VAL),
+};
+
+static const struct bt_data config_sd[] = {
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
 /*
  * Apple FindMy Offline Finding Advertisement Format:
  * - Uses manufacturer-specific data (Apple Company ID: 0x004C)
@@ -191,12 +238,75 @@ static void protocol_switcher(struct k_timer *timer)
 
 K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 
+/* Start advertising as an unconfigured device */
+static void start_config_advertising(void)
+{
+	const int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, config_ad, ARRAY_SIZE(config_ad), config_sd, ARRAY_SIZE(config_sd));
+	if (err) {
+		printk("Advertising failed to start (err %d)\n", err);
+		return;
+	}
+	printk("Configuration mode active. Waiting for BLE configuration...\n");
+}
+
+/* Connection callbacks for configuration mode */
+static void config_connected(struct bt_conn *conn, uint8_t err)
+{
+	if (err) {
+		printk("Connection failed (err %d)\n", err);
+		return;
+	}
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+	printk("Connected %s\n", addr);
+}
+
+static void config_disconnected(struct bt_conn *conn, uint8_t reason)
+{
+	printk("Disconnected (reason %d)\n", reason);
+}
+
+BT_CONN_CB_DEFINE(config_conn_callbacks) = {
+	.connected = config_connected,
+	.disconnected = config_disconnected
+};
+
+/* Wait for configuration over BLE */
+static void wait_for_configuration(void)
+{
+	printk("\n");
+	printk("========================================\n");
+	printk("  HYBRID TAG - FIRST RUN SETUP\n");
+	printk("========================================\n");
+	printk("\n");
+	printk("Device not configured. Entering configuration mode...\n");
+	/* Start advertising with a configuration service */
+	start_config_advertising();
+}
+
 static void bt_ready(int err)
 {
 	if (err) {
 		printk("Bluetooth ready failed (err %d)\n", err);
 		return;
 	}
+
+	printk("Bluetooth initialized\n");
+
+	/* Check if a device is configured */
+	if (!device_configured) {
+		/* Enter configuration mode - waits until configured */
+		wait_for_configuration();
+		/* After configuration, device needs reboot to start normal operation */
+		return;
+	}
+
+	/* Device is configured, start normal operation */
+	printk("Device already configured\n");
+
+	/* Set MAC address BEFORE starting advertising */
+	set_mac_address();
 
 	printk("Starting with %s\n",
 		current_protocol == PROTOCOL_APPLE_FINDMY ? "Apple FindMy" : "Google FMDN");
@@ -207,8 +317,6 @@ static void bt_ready(int err)
 		return;
 	}
 
-	printk("Advertising started successfully\n");
-
 	/* Start the protocol switcher timer */
 	k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
 	printk("Protocol switcher timer started (interval: %d seconds)\n", PROTOCOL_SWITCH_INTERVAL_SEC);
@@ -218,13 +326,12 @@ int main(void)
 {
 	printk("Hybrid Tag starting...\n");
 
-	/* Set MAC address BEFORE enabling Bluetooth */
-	set_mac_address();
-
-	/* Initialize the Bluetooth Subsystem */
+	/* Initialize Bluetooth - bt_ready callback will handle config check */
 	const int err = bt_enable(bt_ready);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
+		return err;
 	}
+
 	return 0;
 }
