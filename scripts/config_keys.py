@@ -16,7 +16,7 @@ def hex_to_bytes(value: str) -> bytes:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Provision Apple key over BLE.")
     parser.add_argument("--name", default="HYBRID-TAG", help="BLE name to match")
-    parser.add_argument("--key", default="01020000000000000000000000000000000000000000000000000000", help="28-byte Apple key (56 hex chars)")
+    parser.add_argument("--key", default="0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c", help="28-byte Apple key (56 hex chars)")
     args = parser.parse_args()
 
     key = hex_to_bytes(args.key)

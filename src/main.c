@@ -26,16 +26,31 @@ static protocol_t current_protocol = PROTOCOL_GOOGLE_FMDN;
 static uint8_t apple_key[28];
 static uint8_t google_key[20];
 
+static bool apple_key_part1_received = false;
+
 static ssize_t write_apple_key(struct bt_conn *conn,
 					 const struct bt_gatt_attr *attr,
 					 const void *buf, uint16_t len, uint16_t offset,
 					 uint8_t flags)
 {
-	printk("write_apple_key received %u bytes: ", len);
-	for (uint16_t i = 0; i < len; i++) {
-		printk("%02x ", ((uint8_t *)buf)[i]);
+	if (len == 20) {
+		/* First chunk: 20 bytes at offset 0 */
+		memcpy(apple_key, buf, 20);
+		apple_key_part1_received = true;
+		printk("Apple key part 1 received (20 bytes)\n");
+	} else if (len == 8 && apple_key_part1_received) {
+		/* Second chunk: 8 bytes at offset 20 */
+		memcpy(&apple_key[20], buf, 8);
+		apple_key_part1_received = false;
+		printk("Apple key part 2 received (8 bytes)\n");
+		printk("Complete apple key: ");
+		for (int i = 0; i < 28; i++) {
+			printk("%02x ", apple_key[i]);
+		}
+		printk("\n");
+	} else {
+		printk("Unexpected write: %u bytes (part1_received=%d)\n", len, apple_key_part1_received);
 	}
-	printk("\n");
 	return len;
 }
 
@@ -228,9 +243,7 @@ static void start_config_advertising(void)
 	const int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, config_ad, ARRAY_SIZE(config_ad), config_sd, ARRAY_SIZE(config_sd));
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
-		return;
 	}
-	printk("Configuration mode active. Waiting for BLE configuration...\n");
 }
 
 /* Connection callbacks for configuration mode */
@@ -264,8 +277,6 @@ static void wait_for_configuration(void)
 	printk("  HYBRID TAG - FIRST RUN SETUP\n");
 	printk("========================================\n");
 	printk("\n");
-	printk("Device not configured. Entering configuration mode...\n");
-	/* Start advertising with a configuration service */
 	start_config_advertising();
 }
 
