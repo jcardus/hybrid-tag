@@ -177,8 +177,9 @@ static int start_advertising(void)
 
 	int err;
 
-	/* Stop any existing advertising */
 	bt_le_adv_stop();
+
+	set_mac_address();
 
 	if (current_protocol == PROTOCOL_APPLE_FINDMY) {
 		prepare_apple_findmy_adv();
@@ -274,33 +275,12 @@ static void bt_ready(int err)
 		printk("Bluetooth ready failed (err %d)\n", err);
 		return;
 	}
-
 	printk("Bluetooth initialized\n");
-
-	/* Check if a device is configured */
 	if (!device_configured) {
-		/* Enter configuration mode - waits until configured */
 		wait_for_configuration();
-		/* After configuration, device needs reboot to start normal operation */
 		return;
 	}
-
-	/* Device is configured, start normal operation */
 	printk("Device already configured\n");
-
-	/* Set MAC address BEFORE starting advertising */
-	set_mac_address();
-
-	printk("Starting with %s\n",
-		current_protocol == PROTOCOL_APPLE_FINDMY ? "Apple FindMy" : "Google FMDN");
-
-	err = start_advertising();
-	if (err) {
-		printk("Advertising failed to start (err %d)\n", err);
-		return;
-	}
-
-	/* Start the protocol switcher timer */
 	k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
 	printk("Protocol switcher timer started (interval: %d seconds)\n", PROTOCOL_SWITCH_INTERVAL_SEC);
 }
@@ -308,7 +288,6 @@ static void bt_ready(int err)
 int main(void)
 {
 	printk("Hybrid Tag starting...\n");
-	/* Initialize Bluetooth - bt_ready callback will handle config check */
 	const int err = bt_enable(bt_ready);
 	if (err) {
 		printk("Bluetooth init failed (err %d)\n", err);
