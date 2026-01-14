@@ -48,6 +48,9 @@ static ssize_t write_apple_key(struct bt_conn *conn,
 			printk("%02x ", apple_key[i]);
 		}
 		printk("\n");
+		device_configured = true;
+		k_timer_start(&protocol_timer, K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC),
+			      K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
 	} else {
 		printk("Unexpected write: %u bytes (part1_received=%d)\n", len, apple_key_part1_received);
 	}
@@ -234,8 +237,6 @@ static void protocol_switcher(struct k_timer *timer)
 	/* Submit work to the system work queue (will run in thread context) */
 	k_work_submit(&protocol_switch_work);
 }
-
-K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 
 /* Start advertising as an unconfigured device */
 static void start_config_advertising(void)
