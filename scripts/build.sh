@@ -3,11 +3,11 @@ set -e
 
 # Usage: ./build.sh [uf2|openocd|rtt] [board]
 # Examples:
-#   ./build.sh uf2                    # Build and flash via UF2 with USB (nrf52840)
-#   ./build.sh openocd                # Build and flash via OpenOCD (nrf52832)
-#   ./build.sh rtt                    # Build, flash, and monitor RTT logs (nrf52832)
+#   ./build.sh uf2                              # Build and flash via UF2 with USB (nrf52840)
+#   ./build.sh openocd nrf52dk/nrf52832         # Build and flash via OpenOCD (nrf52832)
+#   ./build.sh rtt nrf52dk/nrf52832             # Build, flash, and monitor RTT logs (nrf52832)
 
-METHOD=${1:-"openocd"}
+METHOD=${1:-"uf2"}
 BOARD=${2:-"promicro_nrf52840/nrf52840"} # promicro_nrf52840/nrf52840"
 
 source ../ncs/export_env.sh
@@ -96,7 +96,7 @@ elif [ "${METHOD}" == "openocd" ] || [ "${METHOD}" == "rtt" ]; then
   pkill -9 openocd 2>/dev/null || true
 
   echo "Flashing via OpenOCD..."
-  openocd -f "${OPENOCD_CFG}" -c "init; halt; nrf5 mass_erase; program ${HEX_FILE} verify; reset; exit"
+  openocd -f "${OPENOCD_CFG}" -c "init; halt; nrf51 mass_erase; program ${HEX_FILE} verify; reset; exit"
   echo "Flash complete!"
 
   # If RTT mode, start RTT monitor
