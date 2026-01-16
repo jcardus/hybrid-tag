@@ -310,11 +310,7 @@ BT_CONN_CB_DEFINE(config_conn_callbacks) = {
 /* Wait for configuration over BLE */
 static void wait_for_configuration(void)
 {
-	printk("\n");
-	printk("========================================\n");
-	printk("  HYBRID TAG - FIRST RUN SETUP\n");
-	printk("========================================\n");
-	printk("\n");
+	printk("HYBRID TAG - FIRST RUN\n");
 	start_config_advertising();
 }
 
@@ -324,7 +320,6 @@ static void bt_ready(int err)
 		printk("Bluetooth ready failed (err %d)\n", err);
 		return;
 	}
-	printk("Bluetooth initialized\n");
 	if (!device_configured) {
 		wait_for_configuration();
 		return;
