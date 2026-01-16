@@ -34,18 +34,13 @@ jobs:
 
       - name: Install nrfutil + toolchain-manager + toolchain
         run: |
-          # Install nrfutil (Linux x64)
           curl -L -o nrfutil https://developer.nordicsemi.com/.pc-tools/nrfutil/x64-linux/nrfutil
           chmod +x nrfutil
 
-          # Install toolchain for this NCS version
           ./nrfutil install toolchain-manager
           ./nrfutil toolchain-manager install --ncs-version ${NCS_REV}
-          
-          # Export toolchain env vars into a script we can source
           ./nrfutil toolchain-manager env --as-script > export_env.sh
           
-          # Install west
           python -m pip install --upgrade pip
           pip install west
 
@@ -58,10 +53,10 @@ jobs:
           west zephyr-export
           python -m pip install -r zephyr/scripts/requirements.txt
 
-      - name: Build your app
+      - name: Build firmware
         run: |
           source ../export_env.sh
-          west build -p always -b "${BOARD}" -s "${GITHUB_WORKSPACE}"
+          west build -p always -b "${BOARD}" -s ..
         working-directory: ncs
 
       - name: Prepare GitHub Pages
@@ -69,38 +64,24 @@ jobs:
         run: |
           mkdir -p _site
           cp -r build/*.hex _site
-
-          BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-
           cat > _site/index.html << EOF
           <!DOCTYPE html>
           <html>
           <head>
-            <title>Hybrid Tag Build Artifacts - ${BUILD_DATE}</title>
-            <style>
-              body { font-family: sans-serif; margin: 40px; }
-              h1 { color: #333; }
-              ul { list-style-type: none; padding: 0; }
-              li { margin: 10px 0; }
-              a { color: #0066cc; text-decoration: none; }
-              a:hover { text-decoration: underline; }
-              .build-info { color: #666; font-size: 0.9em; }
-            </style>
+            <title>Hybrid Tag Build Artifacts</title>
           </head>
           <body>
             <h1>Hybrid Tag Build Artifacts</h1>
-            <p class="build-info">Built: ${BUILD_DATE}</p>
-            <p>Board: ${BOARD}</p>
-            <p>NCS Version: ${NCS_REV}</p>
+            <p style="color: #666; font-size: 0.9em">Built: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+            <p>Board: ${BOARD}</p><p>NCS Version: ${NCS_REV}</p>
             <h2>Download Files:</h2>
             <ul>
           EOF
-
-          # Add links for each file
+          
           for file in _site/*; do
             if [ -f "$file" ] && [ "$(basename "$file")" != "index.html" ]; then
               filename=$(basename "$file")
-              echo "      <li><a href=\"$filename\">$filename</a></li>" >> _site/index.html
+              echo "<li><a href=\"$filename\">$filename</a></li>" >> _site/index.html
             fi
           done
 
@@ -109,9 +90,6 @@ jobs:
           </body>
           </html>
           EOF
-
-          echo "Files prepared for GitHub Pages:"
-          ls -lh _site/
 
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
