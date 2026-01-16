@@ -26,7 +26,7 @@ async def main() -> None:
         raise SystemExit("Google key must be 20 bytes")
 
     print("Scanning...")
-    device = await BleakScanner.find_device_by_name(args.name, timeout=30.0)
+    device = await BleakScanner.find_device_by_name(args.name, timeout=60.0)
     if not device:
         raise SystemExit(f"Device '{args.name}' not found")
 
