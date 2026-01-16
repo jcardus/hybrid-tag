@@ -281,6 +281,8 @@ static void start_config_advertising(void)
 	const int err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, config_ad, ARRAY_SIZE(config_ad), config_sd, ARRAY_SIZE(config_sd));
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
+	} else {
+		printk("Advertising started\n");
 	}
 }
 
@@ -292,7 +294,6 @@ static void config_connected(struct bt_conn *conn, uint8_t err)
 		return;
 	}
 	char addr[BT_ADDR_LE_STR_LEN];
-
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 	printk("Connected %s\n", addr);
 }
