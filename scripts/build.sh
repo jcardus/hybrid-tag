@@ -1,10 +1,11 @@
 #!/bin/bash
 set -e
 
-# Usage: ./build.sh [uf2|openocd] [board]
+# Usage: ./build.sh [uf2|openocd|rtt] [board]
 # Examples:
 #   ./build.sh uf2                    # Build and flash via UF2 (nrf52840)
 #   ./build.sh openocd                # Build and flash via OpenOCD (nrf52832)
+#   ./build.sh rtt                    # Build, flash, and monitor RTT logs
 #   ./build.sh openocd nrf52dk/nrf52832
 
 METHOD=${1:-"openocd"}
@@ -18,7 +19,13 @@ echo "  Board: ${BOARD}"
 echo "========================================"
 
 cd ../ncs
-west build -p always -b "${BOARD}" -s ..
+
+# Add RTT overlay for rtt method
+if [ "${METHOD}" == "rtt" ]; then
+  west build -p always -b "${BOARD}" -s .. -- -DEXTRA_CONF_FILE=prj.rtt.conf
+else
+  west build -p always -b "${BOARD}" -s ..
+fi
 
   HEX_FILE="build/merged.hex"
 
@@ -65,7 +72,7 @@ if [ "${METHOD}" == "uf2" ]; then
     echo "Warning: /Volumes/NICENANO not found. Copy manually."
   fi
 
-elif [ "${METHOD}" == "openocd" ]; then
+elif [ "${METHOD}" == "openocd" ] || [ "${METHOD}" == "rtt" ]; then
   #############################################
   # OpenOCD Flashing (for nRF52832 via ST-Link)
   #############################################
@@ -76,13 +83,32 @@ elif [ "${METHOD}" == "openocd" ]; then
     exit 1
   fi
 
+  # Kill any existing OpenOCD processes
+  pkill -9 openocd 2>/dev/null || true
+
   echo "Flashing via OpenOCD..."
   openocd -f "${OPENOCD_CFG}" -c "init; halt; nrf51 mass_erase; program ${HEX_FILE} verify; reset; exit"
-
   echo "Flash complete!"
 
+  # If RTT mode, start RTT monitor
+  if [ "${METHOD}" == "rtt" ]; then
+    echo ""
+    echo "Starting RTT monitor..."
+    echo "Press Ctrl+C to exit"
+    echo ""
+    openocd -f "${OPENOCD_CFG}" \
+      -c "init" \
+      -c "rtt setup 0x20000000 0x10000 \"SEGGER RTT\"" \
+      -c "rtt start" \
+      -c "rtt server start 9090 0" &
+    OPENOCD_PID=$!
+    sleep 2
+    echo "=== RTT Output ==="
+    nc -v localhost 9090
+    kill $OPENOCD_PID 2>/dev/null || true
+  fi
 else
   echo "Error: Unknown method '${METHOD}'"
-  echo "Usage: $0 [uf2|openocd] [board]"
+  echo "Usage: $0 [uf2|openocd|rtt] [board]"
   exit 1
 fi
