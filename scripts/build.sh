@@ -85,7 +85,7 @@ elif [ "${METHOD}" == "openocd" ] || [ "${METHOD}" == "rtt" ]; then
   #############################################
   # OpenOCD Flashing (for nRF52832 via ST-Link)
   #############################################
-  OPENOCD_CFG="../openocd.cfg"
+  OPENOCD_CFG="../scripts/openocd.cfg"
 
   if [ ! -f "${OPENOCD_CFG}" ]; then
     echo "Error: ${OPENOCD_CFG} not found"
