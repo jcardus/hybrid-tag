@@ -21,6 +21,10 @@ cd ../ncs
 
 # Add config overlays based on method
 if [ "${METHOD}" == "rtt" ]; then
+  if [ "${2}" == "" ]; then
+    echo "No board specified for RTT mode, defaulting to nrf52dk/nrf52832"
+    BOARD="nrf52dk/nrf52832"
+  fi
   west build -p always -b "${BOARD}" -s .. -- -DEXTRA_CONF_FILE=prj.rtt.conf
 elif [ "${METHOD}" == "uf2" ]; then
   west build -p always -b "${BOARD}" -s .. -- -DEXTRA_CONF_FILE=prj.usb.conf
