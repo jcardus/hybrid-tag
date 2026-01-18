@@ -34,4 +34,5 @@ K_TIMER_DEFINE(protocol_timer, protocol_switcher, NULL);
 
 static void set_mac_address(void);
 static int start_advertising(void);
+static void start_scan(void);
 #endif /* MAIN_H */

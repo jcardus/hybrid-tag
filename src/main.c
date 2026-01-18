@@ -304,11 +304,65 @@ BT_CONN_CB_DEFINE(config_conn_callbacks) = {
 	.disconnected = config_disconnected
 };
 
+static bool adv_data_found(struct bt_data *data, void *user_data)
+{
+	memcpy(user_data, data->data, data->data_len);
+	switch (data->type) {
+        case BT_DATA_NAME_COMPLETE:
+        case BT_DATA_NAME_SHORTENED:
+			((char *)user_data)[data->data_len] = '\0';
+			printk("%s\n", (char *)user_data);
+            break;
+        case BT_DATA_MANUFACTURER_DATA: {
+            const uint8_t *p = data->data;
+        	printk("Manufacturer (len = %d): ", data->data_len);
+        	for (uint8_t i = 0; i < data->data_len; i++) {
+        		printk("%02x", p[i]);
+        	}
+        	printk("\n");
+            break;
+        }
+		default:
+			break;
+	}
+	return true;
+}
+
+static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+            struct net_buf_simple *ad)
+{
+	if (-60 > rssi) {
+		return;
+	}
+	char addr_str[BT_ADDR_LE_STR_LEN];
+	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
+	char name_str[32] = {0};
+	bt_data_parse(ad, adv_data_found, name_str);
+}
+
+/* Start scanning for peripherals with our service */
+static void start_scan(void)
+{
+	const struct bt_le_scan_param scan_param = {
+		.type = BT_LE_SCAN_TYPE_PASSIVE,
+		.options = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
+		.interval = BT_GAP_SCAN_SLOW_INTERVAL_1,
+		.window = BT_GAP_SCAN_SLOW_WINDOW_1,
+	};
+	const int err = bt_le_scan_start(&scan_param, scan_cb);
+	if (err) {
+		printk("Scanning failed to start (err %d)\n", err);
+		return;
+	}
+	printk("Scanning successfully started\n");
+}
+
 /* Wait for configuration over BLE */
 static void wait_for_configuration(void)
 {
 	printk("HYBRID TAG - FIRST RUN\n");
 	start_config_advertising();
+	start_scan();
 }
 
 static void bt_ready(int err)
