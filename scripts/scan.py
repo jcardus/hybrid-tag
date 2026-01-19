@@ -9,8 +9,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scan for AirTags and display MAC/public key.")
     parser.add_argument("--duration", type=int, default=10000, help="Scan duration in ms (default: 8000)")
     parser.add_argument("--rssi", type=int, default=-70, help="Minimum RSSI filter (default: -70)")
-    parser.add_argument("--cid", type=lambda x: int(x, 0), default=0x1234, help="Filter by company ID (e.g., 0x004C for Apple)")
-    parser.add_argument("--continuous", action="store_true", help="Scan continuously")
+    parser.add_argument("--cid", nargs='*', default=[0xfff1, 0xfff2, 0xfff3], type=lambda x: int(x, 0), help="Filter by company IDs (e.g., --cid 0x004C 0x12fa)")
+    parser.add_argument("--name", default='hybrid', type=str, help="Include devices matching this name (substring match)")
+    parser.add_argument("--continuous", default=1, action="store_true", help="Scan continuously")
     args = parser.parse_args()
 
     adapters = simplepyble.Adapter.get_adapters()
@@ -39,15 +40,14 @@ def main() -> None:
                     continue
 
                 # Get manufacturer data
-                if not hasattr(p, "manufacturer_data"):
-                    continue
+                mfg_data = p.manufacturer_data() if hasattr(p, "manufacturer_data") else {}
 
-                mfg_data = p.manufacturer_data()
-                if not mfg_data:
-                    continue
+                # Include if: CID matches OR name matches
+                dev_name = (p.identifier() or "").lower()
+                cid_match = args.cid and any(cid in mfg_data for cid in args.cid)
+                name_match = args.name and args.name.lower() in dev_name
 
-                # Filter by company ID if specified
-                if args.cid is not None and args.cid not in mfg_data:
+                if not (cid_match or name_match):
                     continue
 
                 seen_devices.add(addr)
@@ -57,9 +57,10 @@ def main() -> None:
                 rssi = p.rssi() if hasattr(p, "rssi") else "N/A"
 
                 print(f"\n{name}")
+                print(f"  addr: {addr}")
                 print(f"  RSSI: {rssi} dBm")
                 for company_id, data in mfg_data.items():
-                    if args.cid is not None and company_id != args.cid:
+                    if args.cid and company_id not in args.cid:
                         continue
                     print(f"  Company ID: 0x{company_id:04X}")
                     print(f"  Data ({len(data)}): {data.hex()}")

@@ -27,13 +27,21 @@ static uint8_t apple_key[28];
 static uint8_t google_key[20];
 
 static bool apple_key_part1_received = false;
-static bool apple_key_received = false;
+static bool apple_key_part2_received = false;
 static bool google_key_received = false;
 
 /* Work handler to start advertising after the key is received */
 static void start_advertising_work_handler(struct k_work *work)
 {
-	bt_disable();
+	printk("start advertising...\n");
+	int err = bt_le_scan_stop();
+	if (err) {
+		printk("Failed to stop scanning (err %d)\n", err);
+	}
+	err = bt_disable();
+	if (err) {
+		printk("Failed to disable Bluetooth (err %d)\n", err);
+	}
 	set_mac_address();
 	bt_enable(NULL);
 	k_timer_start(&protocol_timer, K_SECONDS(0), K_SECONDS(PROTOCOL_SWITCH_INTERVAL_SEC));
@@ -41,11 +49,14 @@ static void start_advertising_work_handler(struct k_work *work)
 
 K_WORK_DELAYABLE_DEFINE(start_advertising_work, start_advertising_work_handler);
 
+static bool keys_received() {
+	return apple_key_part1_received && apple_key_part2_received && google_key_received;
+}
 /* Check if both keys are received and start advertising */
 static void check_keys_and_start(void)
 {
-	if (apple_key_received && google_key_received) {
-		printk("Both keys received, starting advertising in 2 seconds...\n");
+	if (keys_received()) {
+		printk("All keys received, starting advertising in 2 seconds...\n");
 		device_configured = true;
 		k_work_schedule(&start_advertising_work, K_SECONDS(2));
 	}
@@ -64,14 +75,13 @@ static ssize_t write_apple_key(struct bt_conn *conn,
 	} else if (len == 8 && apple_key_part1_received) {
 		/* Second chunk: 8 bytes at offset 20 */
 		memcpy(&apple_key[20], buf, 8);
-		apple_key_part1_received = false;
 		printk("Apple key part 2 received (8 bytes)\n");
 		printk("Complete apple key: ");
 		for (int i = 0; i < 28; i++) {
 			printk("%02x ", apple_key[i]);
 		}
 		printk("\n");
-		apple_key_received = true;
+		apple_key_part2_received = true;
 		check_keys_and_start();
 	} else {
 		printk("Unexpected write: %u bytes (part1_received=%d)\n", len, apple_key_part1_received);
@@ -306,38 +316,35 @@ BT_CONN_CB_DEFINE(config_conn_callbacks) = {
 
 static bool adv_data_found(struct bt_data *data, void *user_data)
 {
-	memcpy(user_data, data->data, data->data_len);
-	switch (data->type) {
-        case BT_DATA_NAME_COMPLETE:
-        case BT_DATA_NAME_SHORTENED:
-			((char *)user_data)[data->data_len] = '\0';
-			printk("%s\n", (char *)user_data);
-            break;
-        case BT_DATA_MANUFACTURER_DATA: {
-            const uint8_t *p = data->data;
-        	printk("Manufacturer (len = %d): ", data->data_len);
-        	for (uint8_t i = 0; i < data->data_len; i++) {
-        		printk("%02x", p[i]);
-        	}
-        	printk("\n");
-            break;
-        }
-		default:
-			break;
+	if (data->type == BT_DATA_MANUFACTURER_DATA) {
+		if (data->data[1] == 0xff) {
+			if (data->data[0] == 0xf1 && data->data_len == 22 && apple_key_part1_received == false) {
+				apple_key_part1_received = true;
+				memcpy(apple_key, &data->data[2], 20);
+				check_keys_and_start();
+				printk("apple 1st part received\n");
+			} else if (data->data[0] == 0xf2 && data->data_len == 10 && apple_key_part2_received == false) {
+				apple_key_part2_received = true;
+				memcpy(&apple_key[20], &data->data[2], 8);
+				check_keys_and_start();
+				printk("apple 2nd part received\n");
+			} else if (data->data[0] == 0xf3 && data->data_len == 22 && google_key_received == false) {
+				google_key_received = true;
+				memcpy(google_key, &data->data[2], 20);
+				printk("google received\n");
+				check_keys_and_start();
+			}
+		}
 	}
 	return true;
 }
 
-static void scan_cb(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
+static void scan_cb(const bt_addr_le_t *addr, const int8_t rssi, const uint8_t type,
             struct net_buf_simple *ad)
 {
-	if (-60 > rssi) {
-		return;
-	}
 	char addr_str[BT_ADDR_LE_STR_LEN];
 	bt_addr_le_to_str(addr, addr_str, sizeof(addr_str));
-	char name_str[32] = {0};
-	bt_data_parse(ad, adv_data_found, name_str);
+	bt_data_parse(ad, adv_data_found, &addr_str);
 }
 
 /* Start scanning for peripherals with our service */
@@ -346,8 +353,8 @@ static void start_scan(void)
 	const struct bt_le_scan_param scan_param = {
 		.type = BT_LE_SCAN_TYPE_PASSIVE,
 		.options = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
-		.interval = BT_GAP_SCAN_SLOW_INTERVAL_1,
-		.window = BT_GAP_SCAN_SLOW_WINDOW_1,
+		.interval = BT_GAP_SCAN_FAST_INTERVAL,
+		.window = BT_GAP_SCAN_FAST_WINDOW
 	};
 	const int err = bt_le_scan_start(&scan_param, scan_cb);
 	if (err) {
@@ -360,8 +367,10 @@ static void start_scan(void)
 /* Wait for configuration over BLE */
 static void wait_for_configuration(void)
 {
-	printk("HYBRID TAG - FIRST RUN\n");
+	printk("HYBRID TAG\n");
+	#ifdef CONFIG_ADVERTISE
 	start_config_advertising();
+	#endif
 	start_scan();
 }
 
