@@ -368,9 +368,7 @@ static void start_scan(void)
 static void wait_for_configuration(void)
 {
 	printk("HYBRID TAG\n");
-	#ifdef CONFIG_ADVERTISE
 	start_config_advertising();
-	#endif
 	start_scan();
 }
 
